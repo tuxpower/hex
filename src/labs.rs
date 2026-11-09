@@ -127,10 +127,11 @@ pub enum Feature {
     CapsLockDictation,
     OpenCodeInWsl,
     TranscribeFiles,
+    OAuthCalendar,
 }
 
 impl Feature {
-    pub const ALL: [Self; 62] = [
+    pub const ALL: [Self; 63] = [
         Self::Meetings,
         Self::VoiceFilter,
         Self::Playground,
@@ -193,6 +194,7 @@ impl Feature {
         Self::CapsLockDictation,
         Self::OpenCodeInWsl,
         Self::TranscribeFiles,
+        Self::OAuthCalendar,
     ];
 
     /// The features this OS and build have.
@@ -279,7 +281,8 @@ impl Feature {
             | Self::GnomeAnnotate
             | Self::CapsLockDictation
             | Self::OpenCodeInWsl
-            | Self::TranscribeFiles => Audience::Everyone,
+            | Self::TranscribeFiles
+            | Self::OAuthCalendar => Audience::Everyone,
         }
     }
 
@@ -346,6 +349,7 @@ impl Feature {
             | Self::ReleaseNotesLink
             | Self::OpenCodeInWsl => 20261108,
             Self::TranscribeFiles => 20261109,
+            Self::OAuthCalendar => 20261109,
         }
     }
 
@@ -451,7 +455,8 @@ impl Feature {
             | Self::SettingsSearch
             | Self::ReleaseNotesLink
             | Self::FillerWords
-            | Self::TranscribeFiles => true,
+            | Self::TranscribeFiles
+            | Self::OAuthCalendar => true,
         }
     }
 
@@ -520,6 +525,7 @@ impl Feature {
             Self::CapsLockDictation => "caps-lock-dictation",
             Self::OpenCodeInWsl => "opencode-in-wsl",
             Self::TranscribeFiles => "transcribe-files",
+            Self::OAuthCalendar => "oauth-calendar",
         }
     }
 
@@ -588,6 +594,7 @@ impl Feature {
             Self::CapsLockDictation => "labs.caps_lock_dictation",
             Self::OpenCodeInWsl => "labs.opencode_in_wsl",
             Self::TranscribeFiles => "labs.transcribe_files",
+            Self::OAuthCalendar => "labs.oauth_calendar",
         }
     }
 
@@ -660,6 +667,7 @@ impl Feature {
             Self::CapsLockDictation => settings.labs.caps_lock_dictation,
             Self::OpenCodeInWsl => settings.labs.opencode_in_wsl,
             Self::TranscribeFiles => settings.labs.transcribe_files,
+            Self::OAuthCalendar => settings.labs.oauth_calendar,
         }
     }
 
@@ -730,6 +738,7 @@ impl Feature {
             &mut labs.caps_lock_dictation,
             &mut labs.opencode_in_wsl,
             &mut labs.transcribe_files,
+            &mut labs.oauth_calendar,
         ]
     }
 
@@ -800,6 +809,7 @@ impl Feature {
             Self::CapsLockDictation => settings.labs.caps_lock_dictation = on,
             Self::OpenCodeInWsl => settings.labs.opencode_in_wsl = on,
             Self::TranscribeFiles => settings.labs.transcribe_files = on,
+            Self::OAuthCalendar => settings.labs.oauth_calendar = on,
             // Off, no shortcut keeps a key only the feature allows.
             Self::StandaloneSpecialKeys => {
                 settings.labs.standalone_special_keys = on;
@@ -875,6 +885,9 @@ const CAPS_LOCK_SLOW_BLINK: u64 = TYPED_TEXT << 1;
 /// The next bit above Caps Lock's slow blink: an OpenCode service in WSL is
 /// found when no Windows one answers (Windows).
 const OPENCODE_IN_WSL: u64 = CAPS_LOCK_SLOW_BLINK << 1;
+/// The next bit above OpenCode in WSL: direct OAuth calendar connections
+/// (Google or Microsoft) for meeting reminders on any OS.
+const OAUTH_CALENDAR: u64 = OPENCODE_IN_WSL << 1;
 
 /// This process's `labs` switches: unknown until settings load or one is
 /// first read.
@@ -1167,6 +1180,13 @@ pub fn opencode_in_wsl() -> bool {
     on(OPENCODE_IN_WSL) && Feature::OpenCodeInWsl.on_this_os()
 }
 
+/// Direct OAuth calendar connections (Google or Microsoft) for meeting
+/// reminders are enabled (read where the calendar reminder scheduler starts
+/// and where Meetings › Settings shows the Connect buttons).
+pub fn oauth_calendar() -> bool {
+    on(OAUTH_CALENDAR)
+}
+
 /// Finished meetings may drop their WAV tracks on `meetings.audio_retention`
 /// (read by the meeting controller's expiry pass and the window's Settings
 /// row).
@@ -1357,6 +1377,11 @@ fn encode_where(settings: &LabsSettings, reaches: impl Fn(Feature) -> bool) -> u
             GNOME_ANNOTATE,
         ),
         (Feature::Screenshots, settings.screenshots, SCREENSHOTS),
+        (
+            Feature::OAuthCalendar,
+            settings.oauth_calendar,
+            OAUTH_CALENDAR,
+        ),
     ]
     .into_iter()
     .filter(|(feature, on, _)| *on && reaches(*feature))

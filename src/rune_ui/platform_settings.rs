@@ -846,6 +846,67 @@ fn calendar_section(ui: &Ui, p: Paint, layer: &mut Vec<El>) -> Option<El> {
     if let Some(error) = &view.error {
         rows.push(note("calendar-error", error, p.danger()));
     }
+    // Labs › OAuth Calendar: connect Google / Microsoft directly.
+    if crate::labs::oauth_calendar() {
+        let accounts = &ui.settings.meetings.calendar.oauth_accounts;
+        for (idx, account) in accounts.iter().enumerate() {
+            let email = account.email.clone();
+            rows.push(icon_row(
+                p,
+                &format!("oauth-account-{idx}"),
+                &icons::CALENDAR,
+                account.email.clone(),
+                None,
+                button(
+                    p,
+                    &format!("oauth-disconnect-{idx}"),
+                    tr("Disconnect"),
+                    ButtonKind::Secondary,
+                    move |ui: &mut Ui, _| {
+                        ui.ask(PlatformRequest::Calendar(CalendarRequest::DisconnectOAuth(
+                            email.clone(),
+                        )));
+                    },
+                ),
+            ));
+        }
+        rows.push(icon_row(
+            p,
+            "oauth-connect-google",
+            &icons::CALENDAR,
+            tr("Connect Google Calendar"),
+            Some(tr("Sign in to Google to get meeting reminders")),
+            button(
+                p,
+                "oauth-connect-google-button",
+                tr("Connect"),
+                ButtonKind::Secondary,
+                |ui: &mut Ui, _| {
+                    ui.ask(PlatformRequest::Calendar(CalendarRequest::ConnectOAuth(
+                        crate::app_settings::OAuthCalendarProvider::Google,
+                    )));
+                },
+            ),
+        ));
+        rows.push(icon_row(
+            p,
+            "oauth-connect-microsoft",
+            &icons::CALENDAR,
+            tr("Connect Outlook Calendar"),
+            Some(tr("Sign in to Microsoft to get meeting reminders")),
+            button(
+                p,
+                "oauth-connect-microsoft-button",
+                tr("Connect"),
+                ButtonKind::Secondary,
+                |ui: &mut Ui, _| {
+                    ui.ask(PlatformRequest::Calendar(CalendarRequest::ConnectOAuth(
+                        crate::app_settings::OAuthCalendarProvider::Microsoft,
+                    )));
+                },
+            ),
+        ));
+    }
     Some(section(p, "calendar", tr("Calendar"), rows))
 }
 

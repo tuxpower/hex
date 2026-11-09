@@ -137,6 +137,7 @@ impl Capabilities {
             terminal_paste: super::host::TERMINAL_PASTE,
             keyboard_model_switching: os.keyboard_model_switching
                 && crate::keyboard_input_sources::available(),
+            calendar: os.calendar || crate::labs::oauth_calendar(),
             ..os
         }
     }
@@ -199,12 +200,16 @@ pub(super) struct UpcomingMeeting {
 }
 
 /// What the Calendar card asks the host for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum CalendarRequest {
     /// Ask macOS for full calendar access, then mark the calendar connected.
     Connect,
     /// System Settings › Privacy & Security › Calendars.
     OpenPrivacySettings,
+    /// Start an OAuth PKCE flow for the given provider (Labs › OAuth Calendar).
+    ConnectOAuth(crate::app_settings::OAuthCalendarProvider),
+    /// Remove the OAuth account with the given email address.
+    DisconnectOAuth(String),
 }
 
 /// Whether Apple Intelligence can write meeting notes, as
@@ -841,7 +846,9 @@ impl Difference {
 const DIFFERENCES: &[(&str, Difference)] = &[
     (
         "calendar",
-        Difference::OsPattern("EventKit; there is no cross-platform calendar source"),
+        Difference::OsPattern(
+            "EventKit is macOS-only; Labs › Connect calendar via OAuth enables it on Linux and Windows",
+        ),
     ),
     (
         "permissions",

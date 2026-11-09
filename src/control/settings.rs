@@ -585,6 +585,17 @@ const KEYS: &[Key] = &[
         "Labs: hex transcribe <file> turns a WAV recording into text with the selected dictation model",
     ),
     key(
+        "labs.oauth_calendar",
+        Kind::Bool,
+        "Labs: connect Google Calendar or Microsoft Outlook directly for meeting reminders",
+    ),
+    read_only(
+        "meetings.calendar.oauth_accounts",
+        Kind::Json,
+        "OAuth-connected Google and Microsoft calendar accounts",
+        "connect an account from Settings › Meetings › Calendar when Labs › Connect calendar via OAuth is on",
+    ),
+    key(
         "meetings.enabled",
         Kind::Bool,
         "Labs: Meetings (beta), call detection, recording, and transcripts",
@@ -816,6 +827,7 @@ const NEEDS: &[(&str, &str)] = &[
     ("labs.meeting_finished_event", "meetings"),
     ("labs.meeting_descriptive_filenames", "meetings"),
     ("labs.follow_live_transcript", "meetings"),
+    ("labs.oauth_calendar", "meetings"),
     ("experimental.hex_microphone", "fun"),
     ("typed_text_hotkey", "typed_text"),
     ("show_dock_icon", "dock_icon"),

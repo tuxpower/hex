@@ -141,7 +141,8 @@ Browser calls -> offered as "Call in <browser>": no site is read yet, so a
         vivaldi-stable, vivaldi-snapshot; a Vivaldi web app runs in Vivaldi's
         process); others are not detected (#1105)
 Permissions -> none asked; the System Audio Recording row is macOS-only
-Calendar -> none (no Connect calendar row)
+Calendar -> none (no EventKit Connect calendar row; Labs › Connect calendar via
+    OAuth shows Connect Google / Connect Outlook when on)
 Notes and live chapters -> After a meeting › Summaries is a switch (off by
     default; on = OpenCode): "Titles and short summaries. Sends the transcript
     to your OpenCode model"; Model nests under it while on, as on macOS
@@ -573,6 +574,71 @@ Record path. Sources: [calendar.rs](../../src/calendar.rs),
 [meeting/watcher.rs](../../src/meeting/watcher.rs), `CalendarFeed` in
 [macos_host.rs](../../src/rune_ui/macos_host.rs), and
 [platform_settings.rs](../../src/rune_ui/platform_settings.rs).
+
+### Labs › Connect Google / Microsoft Calendar via OAuth
+
+`labs.oauth_calendar` (off by default, `Feature::OAuthCalendar`, all OSes,
+group Meetings). Enables direct OAuth 2.0 PKCE connections to Google Calendar
+and Microsoft Outlook on any OS — no EventKit and no macOS calendar permission.
+When on, Meetings › Settings › Calendar shows Connect buttons for both providers
+alongside any existing EventKit connection.
+
+```ts
+Labs › Connect Google / Microsoft Calendar via OAuth: ON
+  -> Meetings > Settings > Calendar gains:
+     ├── Connect Google Calendar   [Connect]
+     └── Connect Outlook Calendar  [Connect]
+
+Connect Google Calendar / Connect Outlook Calendar
+  -> start_connect(provider)          // calendar/oauth.rs
+     ├── bind TcpListener 127.0.0.1:49152–49252 (first available)
+     ├── generate PKCE verifier (32 random bytes, base64url) + S256 challenge
+     ├── generate one-time CSRF state token (16 random bytes, base64url)
+     ├── open browser at provider authorization URL
+     └── PendingConnect::finish() (blocking, background thread)
+         ├── accept one TCP connection (the browser redirect)
+         ├── parse ?code= and ?state= from "GET /oauth?… HTTP/1.1"
+         ├── verify state matches (CSRF guard)
+         ├── exchange_code() -> POST token endpoint, body: code + verifier
+         ├── fetch_email() -> GET userinfo / Graph /me
+         └── OAuthCalendarAccount { provider, email, access_token,
+                                    refresh_token, expires_at }
+               -> saved in meetings.calendar.oauth_accounts (settings.json)
+
+Connected account row (one per account):
+  "<email>" [Disconnect] -> removes account from oauth_accounts
+
+Token lifecycle (calendar/oauth.rs):
+  ensure_fresh(account) -> refresh if expires_at <= now
+  refresh_access_token() -> POST token endpoint, grant_type=refresh_token
+  fetch_events(account) -> ensure_fresh, then GET events (48 h window)
+    ├── Google: /calendar/v3/calendars/primary/events?timeMin=…&timeMax=…
+    └── Microsoft: /me/calendarView?startDateTime=…&endDateTime=…
+```
+
+All tokens are stored under `meetings.calendar.oauth_accounts` in
+`settings.json`. The field is always serialized (no `skip_serializing_if`) so
+`every_persisted_setting_has_a_cli_key` sees it. Its `hex settings` key is
+`meetings.calendar.oauth_accounts` (read-only — connect from Settings).
+
+No new crates: PKCE uses `sha2` + `getrandom`; HTTP uses `crate::net::agent`
+(ureq 3.x); URL encoding uses `url::form_urlencoded`; the redirect listener
+uses `std::net::TcpListener`; no `base64` crate (encoded inline in `oauth.rs`).
+
+Checks (unit, `calendar/oauth.rs`): `base64url_encode_known_vectors`,
+`pkce_verifier_is_43_or_44_chars_base64url`, `pkce_challenge_is_valid_sha256_base64url`,
+`pkce_verifier_and_challenge_differ`, `unix_secs_to_rfc3339_epoch`,
+`unix_secs_to_rfc3339_known`, `parse_google_events_empty`,
+`parse_google_events_one`, `parse_microsoft_events_one`,
+`parse_token_response_success`, `parse_token_response_error`.
+
+Not yet observed: a real OAuth round-trip (browser → redirect → token
+exchange → event fetch). The macOS host stubs `ConnectOAuth` / `DisconnectOAuth`
+with a warning log; the actual account-save flow needs wiring to the meeting
+controller's reminder loop. Sources: [calendar/oauth.rs](../../src/calendar/oauth.rs),
+`OAuthCalendarProvider`, `OAuthCalendarAccount` in
+[app_settings/meetings.rs](../../src/app_settings/meetings.rs), and the
+calendar section in [platform_settings.rs](../../src/rune_ui/platform_settings.rs).
 
 ### Record
 

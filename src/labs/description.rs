@@ -171,6 +171,9 @@ impl Feature {
             Self::TranscribeFiles => {
                 "Turn a WAV recording into text with hex transcribe <file> and your dictation model"
             }
+            Self::OAuthCalendar => {
+                "Connect Google Calendar or Microsoft Outlook directly for meeting reminders; no EventKit access needed"
+            }
         }
     }
 }

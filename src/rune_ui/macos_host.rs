@@ -757,6 +757,12 @@ impl NativeHost for MacHost {
                 self.calendar.opening_privacy_settings();
                 crate::calendar::open_privacy_settings();
             }
+            PlatformRequest::Calendar(CalendarRequest::ConnectOAuth(provider)) => {
+                tracing::warn!(?provider, "ConnectOAuth: OAuth calendar not yet implemented on macOS");
+            }
+            PlatformRequest::Calendar(CalendarRequest::DisconnectOAuth(email)) => {
+                tracing::warn!(%email, "DisconnectOAuth: OAuth calendar not yet implemented on macOS");
+            }
             PlatformRequest::Relaunch => {
                 if let Err(error) = crate::desktop::onboarding::record_relaunch(
                     crate::desktop::onboarding::unix_ms(),

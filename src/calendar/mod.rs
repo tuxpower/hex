@@ -6,6 +6,8 @@
 //! Hex asks for calendar access only when the user clicks Connect calendar,
 //! reads events locally through EventKit, and makes no network request.
 
+pub mod oauth;
+
 use std::collections::HashMap;
 
 use serde::Deserialize;

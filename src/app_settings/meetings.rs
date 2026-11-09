@@ -187,6 +187,30 @@ impl MeetingRetention {
     }
 }
 
+/// Which OAuth calendar service an account connects to.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthCalendarProvider {
+    /// Google Calendar (calendar.google.com).
+    Google,
+    /// Microsoft Outlook / Microsoft 365 (outlook.live.com, outlook.office.com).
+    Microsoft,
+}
+
+/// A connected OAuth calendar account; tokens are stored in settings.json
+/// under `meetings.calendar.oauth_accounts`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OAuthCalendarAccount {
+    pub provider: OAuthCalendarProvider,
+    /// Display email address for the account, read from the provider's
+    /// userinfo endpoint after the token exchange.
+    pub email: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    /// Unix timestamp (seconds) when `access_token` expires.
+    pub expires_at: u64,
+}
+
 /// The connected calendar and its meeting reminders.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
@@ -202,6 +226,10 @@ pub struct CalendarSettings {
     /// How many minutes before a meeting starts the reminder shows; zero
     /// shows it at the start.
     pub lead_minutes: u8,
+    /// OAuth-connected Google and Microsoft calendar accounts (Labs ›
+    /// Connect Google / Microsoft Calendar). Always serialized so the
+    /// `every_persisted_setting_has_a_cli_key` test sees it.
+    pub oauth_accounts: Vec<OAuthCalendarAccount>,
 }
 
 /// The reminder lead times Settings offers, in minutes.
@@ -214,14 +242,16 @@ impl Default for CalendarSettings {
             excluded_calendars: Vec::new(),
             remind: true,
             lead_minutes: 1,
+            oauth_accounts: Vec::new(),
         }
     }
 }
 
 impl CalendarSettings {
-    /// Whether reminders should run: connected, and wanted.
+    /// Whether reminders should run: connected or an OAuth account present,
+    /// and wanted.
     pub fn reminders_active(&self) -> bool {
-        self.connected && self.remind
+        (self.connected && self.remind) || !self.oauth_accounts.is_empty()
     }
 
     /// The lead time, snapped to an offered choice.
