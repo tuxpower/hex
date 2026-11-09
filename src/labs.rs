@@ -91,6 +91,7 @@ pub enum Feature {
     PickerSortFilter,
     SidedChords,
     TapOrHold,
+    DoubleTapModifiers,
     BenchmarkDetails,
     ParakeetUltra,
     StandaloneSpecialKeys,
@@ -128,7 +129,7 @@ pub enum Feature {
 }
 
 impl Feature {
-    pub const ALL: [Self; 61] = [
+    pub const ALL: [Self; 62] = [
         Self::Meetings,
         Self::VoiceFilter,
         Self::Playground,
@@ -156,6 +157,7 @@ impl Feature {
         Self::PickerSortFilter,
         Self::SidedChords,
         Self::TapOrHold,
+        Self::DoubleTapModifiers,
         Self::BenchmarkDetails,
         Self::ParakeetUltra,
         Self::StandaloneSpecialKeys,
@@ -242,6 +244,7 @@ impl Feature {
             | Self::PickerSortFilter
             | Self::SidedChords
             | Self::TapOrHold
+            | Self::DoubleTapModifiers
             | Self::BenchmarkDetails
             | Self::ParakeetUltra
             | Self::StandaloneSpecialKeys
@@ -341,6 +344,7 @@ impl Feature {
             | Self::TerminalPasteShortcut
             | Self::ReleaseNotesLink
             | Self::OpenCodeInWsl => 20261108,
+            Self::DoubleTapModifiers => 20261109,
         }
     }
 
@@ -405,7 +409,7 @@ impl Feature {
             | Self::NotchIndicator
             | Self::Screenshots
             | Self::CapsLockDictation => cfg!(target_os = "macos"),
-            Self::KeepOnClipboard | Self::CopyOnly => {
+            Self::KeepOnClipboard | Self::CopyOnly | Self::DoubleTapModifiers => {
                 cfg!(any(target_os = "macos", target_os = "windows"))
             }
             Self::TapOrHold => cfg!(any(target_os = "macos", target_os = "linux")),
@@ -479,6 +483,7 @@ impl Feature {
             Self::PickerSortFilter => "picker-sort-filter",
             Self::SidedChords => "sided-modifier-chords",
             Self::TapOrHold => "tap-or-hold",
+            Self::DoubleTapModifiers => "double-tap-modifiers",
             Self::BenchmarkDetails => "benchmark-details",
             Self::ParakeetUltra => "parakeet-ultra",
             Self::StandaloneSpecialKeys => "special-keys",
@@ -546,6 +551,7 @@ impl Feature {
             Self::PickerSortFilter => "labs.picker_sort_filter",
             Self::SidedChords => "labs.sided_modifier_chords",
             Self::TapOrHold => "labs.tap_or_hold",
+            Self::DoubleTapModifiers => "labs.double_tap_modifiers",
             Self::BenchmarkDetails => "labs.benchmark_details",
             Self::ParakeetUltra => "labs.parakeet_ultra",
             Self::StandaloneSpecialKeys => "labs.standalone_special_keys",
@@ -617,6 +623,7 @@ impl Feature {
             Self::PickerSortFilter => settings.labs.picker_sort_filter,
             Self::SidedChords => settings.labs.sided_modifier_chords,
             Self::TapOrHold => settings.labs.tap_or_hold,
+            Self::DoubleTapModifiers => settings.labs.double_tap_modifiers,
             Self::BenchmarkDetails => settings.labs.benchmark_details,
             Self::ParakeetUltra => settings.labs.parakeet_ultra,
             Self::StandaloneSpecialKeys => settings.labs.standalone_special_keys,
@@ -686,6 +693,7 @@ impl Feature {
             &mut labs.picker_sort_filter,
             &mut labs.sided_modifier_chords,
             &mut labs.tap_or_hold,
+            &mut labs.double_tap_modifiers,
             &mut labs.benchmark_details,
             &mut labs.parakeet_ultra,
             &mut labs.standalone_special_keys,
@@ -757,6 +765,12 @@ impl Feature {
             Self::PickerSortFilter => settings.labs.picker_sort_filter = on,
             Self::SidedChords => settings.labs.sided_modifier_chords = on,
             Self::TapOrHold => settings.labs.tap_or_hold = on,
+            Self::DoubleTapModifiers => {
+                settings.labs.double_tap_modifiers = on;
+                // Off, a modifier-only shortcut can't be double-tap-only, so
+                // it falls back as a fresh load would.
+                settings.normalize_double_tap_settings();
+            }
             Self::BenchmarkDetails => settings.labs.benchmark_details = on,
             Self::ParakeetUltra => settings.labs.parakeet_ultra = on,
             Self::HistoryStats => settings.labs.history_stats = on,
@@ -864,6 +878,10 @@ const CAPS_LOCK_SLOW_BLINK: u64 = TYPED_TEXT << 1;
 /// The next bit above Caps Lock's slow blink: an OpenCode service in WSL is
 /// found when no Windows one answers (Windows).
 const OPENCODE_IN_WSL: u64 = CAPS_LOCK_SLOW_BLINK << 1;
+
+/// The next bit above OpenCode in WSL's switch: Double-tap accepts a
+/// modifier-only shortcut (macOS, Windows).
+const DOUBLE_TAP_MODIFIERS: u64 = OPENCODE_IN_WSL << 1;
 
 /// This process's `labs` switches: unknown until settings load or one is
 /// first read.
@@ -982,6 +1000,14 @@ pub fn sided_modifier_chords() -> bool {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn tap_or_hold() -> bool {
     on(TAP_OR_HOLD)
+}
+
+/// Double-tap shortcut mode accepts a modifier-only binding, such as Option
+/// or Globe alone (macOS reads it as each shortcut machine is configured;
+/// Windows reads the saved switch instead).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn double_tap_modifiers() -> bool {
+    on(DOUBLE_TAP_MODIFIERS) && Feature::DoubleTapModifiers.on_this_os()
 }
 
 /// Parakeet Ultra joins the catalog (read wherever a model is listed,
@@ -1237,6 +1263,11 @@ fn encode_where(settings: &LabsSettings, reaches: impl Fn(Feature) -> bool) -> u
             SIDED_CHORDS,
         ),
         (Feature::TapOrHold, settings.tap_or_hold, TAP_OR_HOLD),
+        (
+            Feature::DoubleTapModifiers,
+            settings.double_tap_modifiers,
+            DOUBLE_TAP_MODIFIERS,
+        ),
         (
             Feature::ParakeetUltra,
             settings.parakeet_ultra,
@@ -1583,6 +1614,23 @@ mod tests {
         assert_ne!(state & TAP_OR_HOLD, 0);
         assert_eq!(state & SIDED_CHORDS, 0);
         assert_eq!(state >> MINUTES_SHIFT, 24 * 60);
+    }
+
+    #[test]
+    fn double_tap_modifiers_is_its_own_bit_and_macos_or_windows_only() {
+        let mut labs = LabsSettings::default();
+        assert_eq!(encode_where(&labs, |_| true) & DOUBLE_TAP_MODIFIERS, 0);
+        labs.double_tap_modifiers = true;
+        labs.unload_idle_minutes = 24 * 60;
+        let state = encode_where(&labs, |_| true);
+        assert_ne!(state & DOUBLE_TAP_MODIFIERS, 0);
+        assert_eq!(state & TAP_OR_HOLD, 0);
+        assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
+        assert_eq!(
+            Feature::DoubleTapModifiers.on_this_os(),
+            cfg!(any(target_os = "macos", target_os = "windows"))
+        );
+        assert_eq!(Feature::DoubleTapModifiers.group(), Group::Shortcuts);
     }
 
     #[test]
